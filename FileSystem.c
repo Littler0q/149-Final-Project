@@ -75,7 +75,6 @@ void buildList(){
         }
         previous->link = current;
         previous = current;
-        printf("Current's address: %p\n", current);
     }
 
 }
