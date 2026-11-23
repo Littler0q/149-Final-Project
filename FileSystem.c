@@ -54,10 +54,10 @@ struct nodeType { int info; struct nodeType *link; };
 
 struct nodeType *head;
 
-struct nodeType* createNode(int info){
+struct nodeType* createNode(int sectorNumber){
     struct nodeType *new;
      new = (struct nodeType*) malloc(sizeof(struct nodeType));
-     new->info = info;
+     new->info = sectorNumber;
      return new;
 }
 
@@ -78,6 +78,22 @@ void buildList(){
     }
 
 }
+
+void insertNode(int sectorNumber){
+    struct nodeType *tempHead = head;
+    head = createNode(sectorNumber);
+    head->link = tempHead;
+}
+
+int removeNode(){
+    struct nodeType *temp = head;
+    head = head->link;
+    int filledSector = temp->info;
+    free(temp);
+    return filledSector;
+}
+
+
 
 
 // Initializes a dir with free directory entries, and allows for the link value to be specified.
@@ -113,7 +129,7 @@ void toUpperCase(char *original){
 int main(int argc, char *argv[]){
     initialize();
     buildList();
-
+    
     char *input = "default";
     
     //in-progress REPL for commands
