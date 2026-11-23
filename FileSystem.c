@@ -5,9 +5,9 @@
 
 
 
-#define NUMENTRIES 25
+#define NUMENTRIES 25   // # of directory entries
 #define FREE 'F'
-#define USERDATA 'U'
+#define USERDATA 'U'    // file
 #define SUBDIRECTORY 'D'
 #define EXIT "EXIT"
 #define CREATE "CREATE"
@@ -58,6 +58,7 @@ struct nodeType* createNode(int sectorNumber){
     struct nodeType *new;
      new = (struct nodeType*) malloc(sizeof(struct nodeType));
      new->info = sectorNumber;
+     new->link = NULL;
      return new;
 }
 
@@ -96,10 +97,10 @@ int removeNode(){
 
 
 
-// Initializes a dir with free directory entries, and allows for the link value to be specified.
-void initializeDirectory(struct dirEntries *dir, int linkValue){
+// Initializes a dir with free directory entries
+void initializeDirectory(struct dirEntries *dir){
     for(int i = 0; i < NUMENTRIES; ++i){
-        dir[i].link = linkValue;
+        dir[i].link = -1;
         dir[i].type = FREE;
         strcpy(dir[i].name, "");
         dir[i].size = 0;
@@ -109,11 +110,10 @@ void initializeDirectory(struct dirEntries *dir, int linkValue){
 // Inializes the file system's data structure.
 void initialize(){
     buildList();
-    sector[0].directory.back = 0;
-    sector[0].directory.frwd = 0;
+    sector[0].directory.back = -1;
+    sector[0].directory.frwd = -1;
     sector[0].directory.free = 25;
-    initializeDirectory(sector[0].directory.dir, 0);
-
+    initializeDirectory(sector[0].directory.dir);
 }
 
 
