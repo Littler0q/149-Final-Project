@@ -20,6 +20,8 @@
 #define DIR "DIR"
 #define CD "CD"
 #define ROOT "ROOT"
+#define DIRECTORY_ENTRY_SIZE 20
+#define BLOCK_SIZE 512
 
 
 
@@ -48,6 +50,8 @@ union block
 
 //Core data structure.
 union block sector[100];
+int currentDirectorySector;
+int openFileState;
 
 //Free sector management
 struct nodeType { int info; struct nodeType *link; };
@@ -87,13 +91,15 @@ void insertNode(int sectorNumber){
 }
 
 int removeNode(){
+    if(head == NULL){
+        return -1;
+    }
     struct nodeType *temp = head;
     head = head->link;
     int filledSector = temp->info;
     free(temp);
     return filledSector;
 }
-
 
 
 
@@ -117,6 +123,19 @@ void initialize(){
 }
 
 
+bool verifyStructureSizes(){
+    if(sizeof(struct dirEntries) != DIRECTORY_ENTRY_SIZE){
+        printf("ERROR: Directory entry size is %zu bytes; expected %d\n", sizeof(struct dirEntries), DIRECTORY_ENTRY_SIZE);
+        return false;
+    }
+
+    if(sizeof(union block) != BLOCK_SIZE){
+        printf("ERROR: Disk block size is %zu bytes; expected %d\n", sizeof(union block), BLOCK_SIZE);
+        return false;
+    }
+
+    return true;
+}
 
 // Takes a string, turns all characters uppercase.
 void toUpperCase(char *original){
@@ -127,15 +146,24 @@ void toUpperCase(char *original){
 }
 
 int main(int argc, char *argv[]){
+    if(!verifyStructureSizes()){
+        return 1;
+    }
+
     initialize();
     buildList();
+
+    currentDirectorySector = 0;
+    openFileState = -1;
     
     char *input = "default";
     
     //in-progress REPL for commands
     while(strcmp(input, EXIT) != 0){
+        printf("$ ");
         scanf("%ms", &input);
         toUpperCase(input);
+        printf("calling: %s\n", input);
         
         if(strcmp(input, EXIT) == 0)
         {
@@ -144,6 +172,7 @@ int main(int argc, char *argv[]){
         else if(strcmp(input, CREATE) == 0)
         {
             // TODO: Define and call function
+            create();
         }
         else if(strcmp(input, DELETE) == 0)
         {
@@ -181,7 +210,10 @@ int main(int argc, char *argv[]){
         {
             // TODO: Define and call function
         }
-
+        else {
+            printf("ERROR: Unrecognized command\n");
+            break;
+        }
         
     }
 
