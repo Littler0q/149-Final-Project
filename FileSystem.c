@@ -145,6 +145,110 @@ void toUpperCase(char *original){
     }
 }
 
+
+// Commands
+void create() {
+    char type;
+    char name[10];
+
+    if(scanf(" %c %9s", &type, name) != 2){
+        printf("ERROR: command must have format 'CREATE U|D name'\n");
+    }
+    else {
+        type = (char)toupper((unsigned char)type);
+        if(type != USERDATA && type != SUBDIRECTORY){
+            printf("ERROR: Unknown CREATE type: %c\n", type);
+            return;
+        }
+
+        int directorySector = currentDirectorySector;
+        int entryIndex = -1;                // index of (free) entry to add to
+        int entryDirectorySector = -1;      // directory sector number holding (free) entry
+        bool duplicate = false;
+
+        // search all sectors in directory chain
+        while (true) {
+            for(int i = 0; i < NUMENTRIES; ++i){ // check if space (empty entry) exists and duplicate exists
+                struct dirEntries dirEntry = sector[directorySector].directory.dir[i];
+                if(dirEntry.type == FREE && entryIndex == -1){
+                    entryIndex = i;
+                    entryDirectorySector = directorySector;
+                }
+                if(dirEntry.type != FREE && strcmp(dirEntry.name, name) == 0){
+                    duplicate = true;
+                }
+            }
+            if(sector[directorySector].directory.frwd == -1){
+                break;
+            }
+            directorySector = sector[directorySector].directory.frwd;
+        }
+    
+        if(duplicate){
+            printf("ERROR: Duplicate name: %s\n", name);
+            return;
+        }
+
+        // empty entry not found: extend with another directory sector if SPACE IS AVAILABLE
+        if(entryIndex == -1){
+            int newDirectorySector = removeNode();
+            if(newDirectorySector == -1){
+                printf("ERROR: No free sector available\n");
+                return;
+            }
+            directorySector = currentDirectorySector;
+
+            while(sector[directorySector].directory.frwd != -1){
+                directorySector = sector[directorySector].directory.frwd;
+            }
+
+            sector[directorySector].directory.frwd = newDirectorySector;
+            sector[newDirectorySector].directory.back = directorySector;
+            sector[newDirectorySector].directory.frwd = -1;
+            sector[newDirectorySector].directory.free = NUMENTRIES;
+            initializeDirectory(sector[newDirectorySector].directory.dir);
+
+            entryIndex = 0;
+            directorySector = newDirectorySector;
+            entryDirectorySector = newDirectorySector;
+        }
+        else {
+            directorySector = entryDirectorySector;
+        }
+
+        // create sector for new file/directory and initialize
+        int newSector = removeNode();
+        if(newSector == -1){
+            printf("ERROR: No free sector available\n");
+            return;
+        }
+        if(type == USERDATA){
+            printf("CREATE a regular file named %s\n", name);
+            sector[newSector].data.backf = -1;
+            sector[newSector].data.frwdf = -1;
+            memset(sector[newSector].data.userdata, 0, sizeof(sector[newSector].data.userdata));
+        }
+        else if(type == SUBDIRECTORY){
+            printf("CREATE a subdirectory named %s\n", name);
+            sector[newSector].directory.back = -1;
+            sector[newSector].directory.frwd = -1;
+            sector[newSector].directory.free = NUMENTRIES;
+            initializeDirectory(sector[newSector].directory.dir);
+        }
+
+        // add to current directory
+        struct dirEntries newDirEntry = sector[directorySector].directory.dir[entryIndex];
+        newDirEntry.type = type;
+        strncpy(newDirEntry.name, name, 9);
+        newDirEntry.name[8] = '\0';
+        newDirEntry.link = newSector;
+        newDirEntry.size = 0;
+
+        sector[directorySector].directory.free--;
+    }
+}
+
+
 int main(int argc, char *argv[]){
     if(!verifyStructureSizes()){
         return 1;
