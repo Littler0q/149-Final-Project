@@ -52,6 +52,12 @@ union block
 union block sector[100];
 int currentDirectorySector;
 int openFileState;
+/*
+todo - to track for files:
+- open file state (-1 or file sector # of open file)
+- mode (I, U, or O)
+- current byte/file position (for read and write - adjusted by SEEK)
+*/
 
 //Free sector management
 struct nodeType { int info; struct nodeType *link; };
@@ -82,6 +88,19 @@ void buildList(){
         previous = current;
     }
 
+}
+
+void printFreeSectorList(){
+    struct nodeType *current = head;
+    printf("Free sectors: ");
+    while(current != NULL){
+        printf("%d", current->info);
+        if(current->link != NULL){
+            printf(" -> ");
+        }
+        current = current->link;
+    }
+    printf("\n");
 }
 
 void insertNode(int sectorNumber){
@@ -146,6 +165,13 @@ void toUpperCase(char *original){
 }
 
 
+/*
+todos:
+- refactor initializing directory to helper function
+- test/debug print statements
+- separate commands into module/file
+*/
+
 // Commands
 void create() {
     char type;
@@ -166,9 +192,9 @@ void create() {
         int entryDirectorySector = -1;      // directory sector number holding (free) entry
         bool duplicate = false;
 
-        // search all sectors in directory chain
+        // search all sectors in directory chain: check if space (empty entry) exists and duplicate exists
         while (true) {
-            for(int i = 0; i < NUMENTRIES; ++i){ // check if space (empty entry) exists and duplicate exists
+            for(int i = 0; i < NUMENTRIES; ++i){
                 struct dirEntries dirEntry = sector[directorySector].directory.dir[i];
                 if(dirEntry.type == FREE && entryIndex == -1){
                     entryIndex = i;
@@ -255,7 +281,6 @@ int main(int argc, char *argv[]){
     }
 
     initialize();
-    buildList();
 
     currentDirectorySector = 0;
     openFileState = -1;
@@ -275,7 +300,6 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, CREATE) == 0)
         {
-            // TODO: Define and call function
             create();
         }
         else if(strcmp(input, DELETE) == 0)
@@ -319,6 +343,9 @@ int main(int argc, char *argv[]){
             break;
         }
         
+        printf("----------------------------------------\n");
+        printf("current directory: %d\n", currentDirectorySector);
+        printFreeSectorList();
     }
 
     return 0;
