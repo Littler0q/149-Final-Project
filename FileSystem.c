@@ -173,6 +173,8 @@ todos:
 */
 
 // Commands
+
+// Creates an empty regular file or subdirectory in the current directory
 void create() {
     char type;
     char name[10];
@@ -187,10 +189,14 @@ void create() {
             return;
         }
 
-        int directorySector = currentDirectorySector;
+        int directorySector = currentDirectorySector; 
+        // search from starting sector of current directory
+        while(sector[directorySector].directory.back != -1){
+            directorySector = sector[directorySector].directory.back;
+        }
+
         int entryIndex = -1;                // index of (free) entry to add to
         int entryDirectorySector = -1;      // directory sector number holding (free) entry
-        bool duplicate = false;
 
         // search all sectors in directory chain: check if space (empty entry) exists and duplicate exists
         while (true) {
@@ -201,18 +207,14 @@ void create() {
                     entryDirectorySector = directorySector;
                 }
                 if(dirEntry.type != FREE && strcmp(dirEntry.name, name) == 0){
-                    duplicate = true;
+                    printf("ERROR: Duplicate name: %s\n", name);
+                    return;
                 }
             }
             if(sector[directorySector].directory.frwd == -1){
                 break;
             }
             directorySector = sector[directorySector].directory.frwd;
-        }
-    
-        if(duplicate){
-            printf("ERROR: Duplicate name: %s\n", name);
-            return;
         }
 
         // empty entry not found: extend with another directory sector if SPACE IS AVAILABLE
@@ -222,11 +224,6 @@ void create() {
                 printf("ERROR: No free sector available\n");
                 return;
             }
-            directorySector = currentDirectorySector;
-
-            while(sector[directorySector].directory.frwd != -1){
-                directorySector = sector[directorySector].directory.frwd;
-            }
 
             sector[directorySector].directory.frwd = newDirectorySector;
             sector[newDirectorySector].directory.back = directorySector;
@@ -235,11 +232,7 @@ void create() {
             initializeDirectory(sector[newDirectorySector].directory.dir);
 
             entryIndex = 0;
-            directorySector = newDirectorySector;
             entryDirectorySector = newDirectorySector;
-        }
-        else {
-            directorySector = entryDirectorySector;
         }
 
         // create sector for new file/directory and initialize
@@ -263,15 +256,15 @@ void create() {
         }
 
         // add to current directory
-        struct dirEntries newDirEntry = sector[directorySector].directory.dir[entryIndex];
+        struct dirEntries newDirEntry = sector[entryDirectorySector].directory.dir[entryIndex];
         newDirEntry.type = type;
         strncpy(newDirEntry.name, name, 9);
         newDirEntry.name[8] = '\0';
         newDirEntry.link = newSector;
         newDirEntry.size = 0;
-        sector[directorySector].directory.dir[entryIndex] = newDirEntry;
+        sector[entryDirectorySector].directory.dir[entryIndex] = newDirEntry;
 
-        sector[directorySector].directory.free--;
+        sector[entryDirectorySector].directory.free--;
     }
 
     printFreeSectorList();
@@ -290,6 +283,7 @@ void dir() {
         for (int i = 0; i < NUMENTRIES; i++) {
             char type = entries[i].type;
             if (type == FREE) continue;
+            // printf("(%d:%d) ", dirSector, i); // debug: current sector # and entry #
             printf("%s (%c)", entries[i].name, type);
             if (type == USERDATA) {
                 printf(" %d bytes", entries[i].size);
