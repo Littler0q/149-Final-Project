@@ -168,7 +168,7 @@ void toUpperCase(char *original){
 /*
 todos:
 - refactor initializing directory to helper function
-- test/debug print statements
+- (done) test/debug print statements
 - separate commands into module/file
 */
 
@@ -269,9 +269,51 @@ void create() {
         newDirEntry.name[8] = '\0';
         newDirEntry.link = newSector;
         newDirEntry.size = 0;
+        sector[directorySector].directory.dir[entryIndex] = newDirEntry;
 
         sector[directorySector].directory.free--;
     }
+
+    printFreeSectorList();
+}
+
+// Display names and tpye of all **occupied entries in current directory
+void dir() {
+    int dirSector = currentDirectorySector; // start from starting sector of same directory
+    while (sector[dirSector].directory.back != -1) {
+        dirSector = sector[dirSector].directory.back;
+    }
+
+    bool sectorExists = true;
+    while(sectorExists) {
+        struct dirEntries *entries = sector[dirSector].directory.dir;
+        for (int i = 0; i < NUMENTRIES; i++) {
+            char type = entries[i].type;
+            if (type == FREE) continue;
+            printf("%s (%c)", entries[i].name, type);
+            if (type == USERDATA) {
+                printf(" %d bytes", entries[i].size);
+            }
+            printf("\n");
+        }
+
+        if (sector[dirSector].directory.frwd == -1) {
+            sectorExists = false;
+        }
+        else {
+            dirSector = sector[dirSector].directory.frwd;
+        }
+    }
+}
+
+// Change current directory to named subdirectory
+void cd() {
+
+}
+
+// Change current directory to sector 0
+void root() {
+    currentDirectorySector = 0;
 }
 
 
@@ -293,6 +335,8 @@ int main(int argc, char *argv[]){
         scanf("%ms", &input);
         toUpperCase(input);
         printf("calling: %s\n", input);
+
+        printf("current directory: %d\n", currentDirectorySector);
         
         if(strcmp(input, EXIT) == 0)
         {
@@ -328,7 +372,7 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, DIR) == 0)
         {
-            // TODO: Define and call function
+            dir();
         }
         else if(strcmp(input, CD) == 0)
         {
@@ -336,16 +380,13 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, ROOT) == 0)
         {
-            // TODO: Define and call function
+            root();
         }
         else {
             printf("ERROR: Unrecognized command\n");
             break;
         }
-        
         printf("----------------------------------------\n");
-        printf("current directory: %d\n", currentDirectorySector);
-        printFreeSectorList();
     }
 
     return 0;
