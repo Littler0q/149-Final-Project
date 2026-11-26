@@ -182,6 +182,13 @@ void create() {
     if(scanf(" %c %9s", &type, name) != 2){
         printf("ERROR: command must have format 'CREATE U|D name'\n");
     }
+    if(strlen(name) > 8){
+        int character;
+        while((character = getchar()) != '\n' && character != EOF){}
+        printf("ERROR: Name must be at most 8 characters\n");
+        return;
+    }
+
     else {
         type = (char)toupper((unsigned char)type);
         if(type != USERDATA && type != SUBDIRECTORY){
@@ -270,6 +277,32 @@ void create() {
     printFreeSectorList();
 }
 
+void delete() {
+    char name[10];
+    if(scanf("%9s", name) != 1){
+        printf("ERROR: Expected a name to delete\n");
+        return;
+    }
+    if(strlen(name) > 8){
+        int character;
+        while((character = getchar()) != '\n' && character != EOF){}
+        printf("ERROR: Name must be at most 8 characters\n");
+        return;
+    }
+
+    // check if exists in current directory? does it need to exist in current directory?
+    
+    printf("deleting: %s\n", name);
+}
+
+void open() {
+
+}
+
+void close() {
+
+}
+
 // Display names and tpye of all **occupied entries in current directory
 void dir() {
     int dirSector = currentDirectorySector; // start from starting sector of same directory
@@ -342,7 +375,7 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, DELETE) == 0)
         {
-            // TODO: Define and call function
+            delete();
         }
         else if(strcmp(input, OPEN) == 0)
         {
