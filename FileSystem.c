@@ -48,16 +48,23 @@ union block
     } data; 
 };
 
+struct openFile
+{
+    int sector;   // (-1 or sector # of open file)
+    char mode;    // mode (I, U, or O)
+    int position; // byte position of open file (to read from/write to)
+};
+
+struct pathResult
+{
+    int sector;
+    char type;
+};
+
 //Core data structure.
 union block sector[100];
 int currentDirectorySector;
-int openFileState;
-/*
-todo - to track for files:
-- open file state (-1 or file sector # of open file)
-- mode (I, U, or O)
-- current byte/file position (for read and write - adjusted by SEEK)
-*/
+struct openFile currentOpenFile;
 
 //Free sector management
 struct nodeType { int info; struct nodeType *link; };
@@ -139,6 +146,11 @@ void initialize(){
     sector[0].directory.frwd = -1;
     sector[0].directory.free = 25;
     initializeDirectory(sector[0].directory.dir);
+
+    currentDirectorySector = 0;
+    currentOpenFile.sector = -1;
+    currentOpenFile.mode = '\0';     // no mode - not open
+    currentOpenFile.position = 0;
 }
 
 
@@ -164,13 +176,58 @@ void toUpperCase(char *original){
     }
 }
 
+// Resolves a "/"-separated path relative to the current directory.
+// Returns the final sector and its type (directory or file), or {-1, FREE} if not found.
+struct pathResult getSectorByPath(char *path) {
+    if(path == NULL){
+        return (struct pathResult){-1, FREE};
+    }
 
-/*
-todos:
-- refactor initializing directory to helper function
-- (done) test/debug print statements
-- separate commands into module/file
-*/
+    char pathCopy[strlen(path) + 1];    // strtok modifies its input, so work on a copy
+    strcpy(pathCopy, path);
+
+    int directorySector = currentDirectorySector;
+    char *name = strtok(pathCopy, "/");
+
+    while (name != NULL) {
+        // start from the first sector of this directory
+        while (sector[directorySector].directory.back != -1) {
+            directorySector = sector[directorySector].directory.back;
+        }
+
+        // search all entries in all connected sectors of this directory
+        int foundSector = -1;
+        char foundType = FREE;
+        while (foundSector == -1) {
+            for (int i = 0; i < NUMENTRIES; ++i) {
+                struct dirEntries *entry = &sector[directorySector].directory.dir[i];
+                if (entry->type != FREE && strcmp(entry->name, name) == 0) {
+                    foundSector = entry->link;
+                    foundType = entry->type;
+                    break;
+                }
+            }
+            if (foundSector != -1) break;
+            if (sector[directorySector].directory.frwd == -1) {
+                return (struct pathResult){-1, FREE};
+            }
+            directorySector = sector[directorySector].directory.frwd;
+        }
+
+        name = strtok(NULL, "/");
+        if (name == NULL) {
+            return (struct pathResult){foundSector, foundType};
+        }
+        if (foundType != SUBDIRECTORY) {
+            return (struct pathResult){-1, FREE};
+        }
+        directorySector = foundSector;
+    }
+
+    // edge case: empty path refers to the current directory
+    return (struct pathResult){currentDirectorySector, SUBDIRECTORY};
+}
+
 
 // Commands
 
@@ -291,8 +348,12 @@ void delete() {
     }
 
     // check if exists in current directory? does it need to exist in current directory?
-    
+
     printf("deleting: %s\n", name);
+
+    struct pathResult result = getSectorByPath(name);
+    printf("sector #: %d, type: %c\n", result.sector, result.type);
+
 }
 
 void open() {
@@ -335,7 +396,23 @@ void dir() {
 
 // Change current directory to named subdirectory
 void cd() {
-
+    char name[10];
+    if(scanf("%9s", name) != 1){
+        printf("ERROR: Expected a name to delete\n");
+        return;
+    }
+    if(strlen(name) > 8){
+        int character;
+        while((character = getchar()) != '\n' && character != EOF){}
+        printf("ERROR: Name must be at most 8 characters\n");
+        return;
+    }
+    struct pathResult result = getSectorByPath(name);
+    if(result.sector == -1 || result.type != SUBDIRECTORY){
+        printf("ERROR: Directory not found: %s\n", name);
+        return;
+    }
+    currentDirectorySector = result.sector;
 }
 
 // Change current directory to sector 0
@@ -350,9 +427,6 @@ int main(int argc, char *argv[]){
     }
 
     initialize();
-
-    currentDirectorySector = 0;
-    openFileState = -1;
     
     char *input = "default";
     
@@ -362,8 +436,6 @@ int main(int argc, char *argv[]){
         scanf("%ms", &input);
         toUpperCase(input);
         printf("calling: %s\n", input);
-
-        printf("current directory: %d\n", currentDirectorySector);
         
         if(strcmp(input, EXIT) == 0)
         {
@@ -403,7 +475,7 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, CD) == 0)
         {
-            // TODO: Define and call function
+            cd();
         }
         else if(strcmp(input, ROOT) == 0)
         {
@@ -413,6 +485,8 @@ int main(int argc, char *argv[]){
             printf("ERROR: Unrecognized command\n");
             break;
         }
+
+        printf("current directory: %d\n", currentDirectorySector);
         printf("----------------------------------------\n");
     }
 
