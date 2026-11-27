@@ -339,7 +339,66 @@ void create() {
 }
 
 void delete() {
+    char name[10];
+    if(scanf("%9s", name) != 1){
+        printf("ERROR: Expected a name to delete\n");
+        return;
+    }
 
+    struct pathResult result = getSectorByPath(name);
+    printf("sector #: %d, type: %c\n", result.sector, result.type);
+    if (result.sector == -1) {
+        printf("ERROR: %s not found\n", name);
+        return;
+    }
+    else if (result.type == USERDATA) {
+        if (result.sector == currentOpenFile.sector) {
+            printf("ERROR: Cannot delete current open file\n");
+            return;
+        }
+    }
+    else if (result.type == SUBDIRECTORY) {
+        if (result.sector == 0) {
+            printf("ERROR: Cannot delete root\n");
+            return;
+        }
+        for (int i = 0; i < NUMENTRIES; i++) {
+            struct dirEntries *entries = sector[result.sector].directory.dir;
+            if (entries[i].type != FREE) {
+                printf("ERROR: Cannot delete directory that isn't empty\n");
+                return;
+            }
+        }
+    }
+
+    // release all connected sectors
+    int targetSector = result.sector;
+    while (true) {
+        int previousSector = (result.type == SUBDIRECTORY)
+            ? sector[targetSector].directory.back
+            : sector[targetSector].data.backf;
+        if (previousSector == -1) break;
+        targetSector = previousSector;
+    }
+
+    // follow the complete chain forward, returning every sector to the free list
+    while (targetSector != -1) {
+        insertNode(targetSector);
+        targetSector = (result.type == SUBDIRECTORY)
+            ? sector[targetSector].directory.frwd
+            : sector[targetSector].data.frwdf;
+    }
+
+    // mark the directory entry F and update the parent directory sector's free count
+    struct dirEntries *entry = result.directoryEntry;
+    entry->type = FREE;
+    entry->name[0] = '\0';
+    entry->link = -1;
+    entry->size = 0;
+    sector[result.directorySector].directory.free++;
+
+    printf("DELETE %s\n", name);
+    printFreeSectorList();
 }
 
 void open() {
