@@ -50,15 +50,17 @@ union block
 
 struct openFile
 {
-    int sector;   // (-1 or sector # of open file)
+    int sector;   // -1 or sector # of open file
     char mode;    // mode (I, U, or O)
     int position; // byte position of open file (to read from/write to)
 };
 
 struct pathResult
 {
-    int sector;
-    char type;
+    int sector;               // -1 or sector # of open file
+    char type;                // U (regular file) or D (subdirectory)
+    int directorySector;      // parent directory #
+    struct dirEntries *directoryEntry;
 };
 
 //Core data structure.
@@ -180,7 +182,7 @@ void toUpperCase(char *original){
 // Returns the final sector and its type (directory or file), or {-1, FREE} if not found.
 struct pathResult getSectorByPath(char *path) {
     if(path == NULL){
-        return (struct pathResult){-1, FREE};
+        return (struct pathResult){-1, FREE, -1, NULL};
     }
 
     char pathCopy[strlen(path) + 1];    // strtok modifies its input, so work on a copy
@@ -198,34 +200,36 @@ struct pathResult getSectorByPath(char *path) {
         // search all entries in all connected sectors of this directory
         int foundSector = -1;
         char foundType = FREE;
+        struct dirEntries *foundEntry = NULL;
         while (foundSector == -1) {
             for (int i = 0; i < NUMENTRIES; ++i) {
                 struct dirEntries *entry = &sector[directorySector].directory.dir[i];
                 if (entry->type != FREE && strcmp(entry->name, name) == 0) {
                     foundSector = entry->link;
                     foundType = entry->type;
+                    foundEntry = entry;
                     break;
                 }
             }
             if (foundSector != -1) break;
             if (sector[directorySector].directory.frwd == -1) {
-                return (struct pathResult){-1, FREE};
+                return (struct pathResult){-1, FREE, -1, NULL};
             }
             directorySector = sector[directorySector].directory.frwd;
         }
 
         name = strtok(NULL, "/");
         if (name == NULL) {
-            return (struct pathResult){foundSector, foundType};
+            return (struct pathResult){foundSector, foundType, directorySector, foundEntry};
         }
         if (foundType != SUBDIRECTORY) {
-            return (struct pathResult){-1, FREE};
+            return (struct pathResult){-1, FREE, -1, NULL};
         }
         directorySector = foundSector;
     }
 
     // edge case: empty path refers to the current directory
-    return (struct pathResult){currentDirectorySector, SUBDIRECTORY};
+    return (struct pathResult){currentDirectorySector, SUBDIRECTORY, -1, NULL};
 }
 
 
@@ -335,36 +339,53 @@ void create() {
 }
 
 void delete() {
-    char name[10];
-    if(scanf("%9s", name) != 1){
-        printf("ERROR: Expected a name to delete\n");
-        return;
-    }
-    if(strlen(name) > 8){
-        int character;
-        while((character = getchar()) != '\n' && character != EOF){}
-        printf("ERROR: Name must be at most 8 characters\n");
-        return;
-    }
-
-    // check if exists in current directory? does it need to exist in current directory?
-
-    printf("deleting: %s\n", name);
-
-    struct pathResult result = getSectorByPath(name);
-    printf("sector #: %d, type: %c\n", result.sector, result.type);
 
 }
 
 void open() {
+    char name[10];
+    char mode;
+    if(scanf("%9s %c", name, &mode) != 2){
+        printf("ERROR: Expected a mode and file name\n");
+        return;
+    }
+    char type = (char)toupper((unsigned char)mode);
+    if(type != 'I' && type != 'U' && type != 'O'){
+        printf("ERROR: Unknown OPEN type: %c\n", type);
+        return;
+    }
 
+    struct pathResult result = getSectorByPath(name);
+    if (result.sector == -1) {
+        printf("ERROR: %s not found\n", name);
+        return;
+    }
+    else if (result.type == SUBDIRECTORY) {
+        printf("ERROR: Cannot open subdirectory as file\n");
+        return;
+    }
+
+    currentOpenFile.sector = result.sector;
+    currentOpenFile.mode = type;
+    if (type == 'I' || type == 'U') {
+        currentOpenFile.position = 0;
+    }
+    else { // type == 'O': so EOF = size
+        currentOpenFile.position = result.directoryEntry->size;
+    }
+    printf("Open file: sector=%d, mode=%c, position=%d\n",
+           currentOpenFile.sector, currentOpenFile.mode, currentOpenFile.position);
 }
 
 void close() {
-
+    currentOpenFile.sector = -1;
+    currentOpenFile.mode = '\0';
+    currentOpenFile.position = 0;
+    printf("Open file: sector=%d, mode=%c, position=%d\n",
+        currentOpenFile.sector, currentOpenFile.mode, currentOpenFile.position);
 }
 
-// Display names and tpye of all **occupied entries in current directory
+// Display names and type of all **occupied entries in current directory
 void dir() {
     int dirSector = currentDirectorySector; // start from starting sector of same directory
     while (sector[dirSector].directory.back != -1) {
@@ -408,8 +429,12 @@ void cd() {
         return;
     }
     struct pathResult result = getSectorByPath(name);
-    if(result.sector == -1 || result.type != SUBDIRECTORY){
+    if(result.sector == -1){
         printf("ERROR: Directory not found: %s\n", name);
+        return;
+    }
+    else if(result.type != SUBDIRECTORY){
+        printf("ERROR: Failed to switch: %s is not a directory\n", name);
         return;
     }
     currentDirectorySector = result.sector;
@@ -451,11 +476,11 @@ int main(int argc, char *argv[]){
         }
         else if(strcmp(input, OPEN) == 0)
         {
-            // TODO: Define and call function
+            open();
         }
         else if(strcmp(input, CLOSE) == 0)
         {
-            // TODO: Define and call function
+            close();
         }
         else if(strcmp(input, READ) == 0)
         {
